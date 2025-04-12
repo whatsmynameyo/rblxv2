@@ -1,0 +1,94 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+repeat wait() until player and player.Character and player:FindFirstChild("Backpack")
+
+-- Create the tool
+local tool = Instance.new("Tool")
+tool.Name = "SummonBoxTool"
+tool.RequiresHandle = false
+tool.Parent = player:WaitForChild("Backpack")
+
+-- Cooldown flag
+local cooldown = false
+
+-- Tool functionality
+tool.Activated:Connect(function()
+	if cooldown then return end
+	cooldown = true
+	task.delay(30, function() cooldown = false end)
+
+	local char = player.Character
+	if not char then return end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Create the green box
+	local box = Instance.new("Part")
+	box.Size = Vector3.new(100, 50, 100)
+	box.Position = hrp.Position + Vector3.new(0, 25, 0)
+	box.Anchored = true
+	box.CanCollide = false
+	box.Color = Color3.fromRGB(0, 255, 0)
+	box.Material = Enum.Material.Neon
+	box.Transparency = 0.2
+	box.Name = "SummonedBox"
+	box.Parent = workspace
+	Debris:AddItem(box, 15)
+
+	-- Greenish blur effect
+	local blur = Instance.new("BlurEffect", Lighting)
+	blur.Size = 20
+	blur.Name = "GreenBlur"
+
+	local tint = Instance.new("ColorCorrectionEffect", Lighting)
+	tint.TintColor = Color3.fromRGB(100, 255, 100)
+	tint.Name = "GreenTint"
+
+	-- Remove after 15s
+	task.delay(15, function()
+		if blur then blur:Destroy() end
+		if tint then tint:Destroy() end
+	end)
+
+	-- Check inside box
+	local function insideBox()
+		local pos = hrp.Position
+		local bpos = box.Position
+		local half = box.Size / 2
+		return math.abs(pos.X - bpos.X) <= half.X and math.abs(pos.Y - bpos.Y) <= half.Y and math.abs(pos.Z - bpos.Z) <= half.Z
+	end
+
+	local visualLoop
+	visualLoop = RunService.RenderStepped:Connect(function()
+		if insideBox() then
+			blur.Enabled = true
+			tint.Enabled = true
+		else
+			blur.Enabled = false
+			tint.Enabled = false
+		end
+	end)
+
+	task.delay(15, function()
+		if visualLoop then visualLoop:Disconnect() end
+	end)
+
+	-- Pull NPCs with Humanoid or HumanoidRootPart to center
+	for _, model in pairs(workspace:GetDescendants()) do
+		if model:IsA("Model") and model ~= char then
+			local hum = model:FindFirstChildOfClass("Humanoid")
+			local root = model:FindFirstChild("HumanoidRootPart")
+			if (hum or root) and root and (root.Position - box.Position).Magnitude <= 70 then
+				local tween = TweenService:Create(root, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+					Position = box.Position
+				})
+				tween:Play()
+			end
+		end
+	end
+end)
