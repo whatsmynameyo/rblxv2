@@ -1,0 +1,134 @@
+local Players = game:GetService("Players")
+local Debris = game:GetService("Debris")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HRP = Character:WaitForChild("HumanoidRootPart")
+local Backpack = LocalPlayer:WaitForChild("Backpack")
+
+-- Nuke old tool
+local old = Backpack:FindFirstChild("Gravity Slam")
+if old then old:Destroy() end
+
+-- Spawn new tool
+local tool = Instance.new("Tool")
+tool.Name = "Gravity Slam"
+tool.RequiresHandle = false
+tool.CanBeDropped = false
+tool.Parent = Backpack
+
+-- CAM SHAKE BOOM FUNCTION
+local function shakeCamera()
+	local cam = workspace.CurrentCamera
+	local originalCF = cam.CFrame
+	local shakeTime, strength = 0.4, 1.5
+	local elapsed = 0
+	local conn
+
+	conn = RunService.RenderStepped:Connect(function(dt)
+		elapsed += dt
+		if elapsed < shakeTime then
+			local offset = Vector3.new(
+				math.random(-strength, strength),
+				math.random(-strength, strength),
+				math.random(-strength, strength)
+		 ) * 0.15
+			cam.CFrame = originalCF * CFrame.new(offset)
+		else
+			cam.CFrame = originalCF
+			conn:Disconnect()
+		end
+	end)
+end
+
+-- TARGET FINDER
+local function getTarget()
+	local closest, dist = nil, math.huge
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj ~= Character then
+			if obj:FindFirstChild("Humanoid") or obj:FindFirstChild("HumanoidRootPart") then
+				local root = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
+				if root then
+					local d = (HRP.Position - root.Position).Magnitude
+					if d <= 20 and d < dist then
+						closest = root
+						dist = d
+					end
+				end
+			end
+		end
+	end
+	return closest
+end
+
+-- EXPLOSION KILLZONE
+local function explode(pos)
+	shakeCamera()
+
+	local blast = Instance.new("Part")
+	blast.Size = Vector3.new(1,1,1)
+	blast.Position = pos
+	blast.Anchored = true
+	blast.CanCollide = false
+	blast.Transparency = 1
+	blast.Parent = workspace
+
+	local boom = Instance.new("Explosion")
+	boom.Position = pos
+	boom.BlastRadius = 20
+	boom.BlastPressure = 0
+	boom.ExplosionType = Enum.ExplosionType.NoCraters
+	boom.DestroyJointRadiusPercent = 0
+	boom.Parent = blast
+
+	for _, model in ipairs(workspace:GetDescendants()) do
+		if model:IsA("Model") and model ~= Character then
+			local hum = model:FindFirstChild("Humanoid")
+			local hrp = model:FindFirstChild("HumanoidRootPart")
+			if hum and hrp and (hrp.Position - pos).Magnitude <= 20 then
+				hum:TakeDamage(40)
+				
+				local dir = (hrp.Position - pos)
+				if dir.Magnitude < 1 then
+					dir = Vector3.new(math.random(-10,10), 0, math.random(-10,10)).Unit
+				else
+					dir = dir.Unit
+				end
+
+				local bodyVel = Instance.new("BodyVelocity")
+				bodyVel.Velocity = dir * 80 + Vector3.new(0, 40, 0)
+				bodyVel.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+				bodyVel.P = 1250
+				bodyVel.Parent = hrp
+				Debris:AddItem(bodyVel, 0.4)
+			end
+		end
+	end
+
+	Debris:AddItem(blast, 2)
+end
+
+-- GRAVITY SLAM SMASH
+tool.Activated:Connect(function()
+	local target = getTarget()
+	local jumpPos = target and target.Position or HRP.Position
+	local jumpTarget = jumpPos + Vector3.new(0, 50, 0)
+
+	Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	task.wait(0.1)
+
+	local bv = Instance.new("BodyVelocity")
+	bv.Velocity = Vector3.new(0, 150, 0)
+	bv.MaxForce = Vector3.new(0, math.huge, 0)
+	bv.Parent = HRP
+	Debris:AddItem(bv, 0.4)
+
+	local landed
+	landed = Humanoid:GetPropertyChangedSignal("FloorMaterial"):Connect(function()
+		if Humanoid.FloorMaterial ~= Enum.Material.Air then
+			landed:Disconnect()
+			explode(HRP.Position)
+		end
+	end)
+end)
