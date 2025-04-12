@@ -1,0 +1,69 @@
+local Tool = Instance.new("Tool")
+Tool.Name = "Armstrong"
+Tool.RequiresHandle = false
+Tool.Parent = game.Players.LocalPlayer.Backpack
+
+local LocalPlayer = game.Players.LocalPlayer
+local detectionRadius = 20
+
+-- Detect colors from nearby parts
+local function getNearbyColors()
+    local colors = {}
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and part:IsDescendantOf(workspace) and not part:IsDescendantOf(LocalPlayer.Character) then
+            local distance = (part.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if distance <= detectionRadius then
+                table.insert(colors, part.BrickColor)
+            end
+        end
+    end
+    return colors
+end
+
+-- Get the ground level beneath the player
+local function getGroundLevel(position)
+    local ray = Ray.new(position + Vector3.new(0, 100, 0), Vector3.new(0, -200, 0)) -- Cast a ray down to detect ground
+    local hit, hitPosition = workspace:FindPartOnRay(ray, LocalPlayer.Character)
+    return hitPosition.Y -- Return the Y coordinate of the ground
+end
+
+-- Create the wall from colors and ensure it touches the ground
+local function createWallFromColors(colors)
+    local rootPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local forward = LocalPlayer.Character.HumanoidRootPart.CFrame.LookVector
+    local wallStart = rootPos + forward * 10
+
+    local groundLevel = getGroundLevel(wallStart) -- Get the ground level beneath the player
+
+    local wallHeight = 5
+    local wallWidth = 5
+    local blockSize = Vector3.new(2, 2, 1)
+
+    local colorIndex = 1
+
+    for y = 0, wallHeight - 1 do
+        for x = -math.floor(wallWidth / 2), math.floor(wallWidth / 2) do
+            local block = Instance.new("Part")
+            block.Size = blockSize
+            block.Anchored = true
+            block.CanCollide = true -- Ensuring that the block is collidable with everything
+            block.Position = wallStart + Vector3.new(x * blockSize.X, y * blockSize.Y, 0)
+            block.Position = Vector3.new(block.Position.X, groundLevel + blockSize.Y / 2, block.Position.Z) -- Adjust height to touch the ground
+            block.BrickColor = colors[colorIndex] or BrickColor.Random()
+            block.Parent = workspace
+
+            colorIndex += 1
+            if colorIndex > #colors then
+                colorIndex = 1 -- Loop through colors if not enough
+            end
+        end
+    end
+end
+
+Tool.Activated:Connect(function()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    local colors = getNearbyColors()
+    if #colors > 0 then
+        createWallFromColors(colors)
+    end
+end)
